@@ -1,0 +1,169 @@
+#include <vector>
+#include <string>
+#include <iostream>
+
+// Actually this makes more sense if we keep parents instead of children. Back-traversal, at least, will be easier.
+// I think we still need a root though, for graph searches.
+
+class Bag {
+    public:
+        std::string name;
+        std::vector<Bag*> children;
+
+        Bag(const std::string& name) :name {name}  {}
+
+        bool contains_descendant(const std::string& something) {
+            if (name == something) return true;
+            for (Bag* child : children) {
+                if (child->contains_descendant(something)) return true;
+            }
+            return false;
+        }
+
+        Bag* get_descendant(const std::string& something) {
+            Bag* candidate;
+            if (name == something) return this;
+            for (Bag* child : children) {
+                candidate = child->get_descendant(something);
+                if (candidate) return candidate;
+            }
+            return nullptr;
+        }
+
+        // void add_child(const std::string& child_name) {
+        //     for (Bag* child : children) {
+        //         if (child->name == child_name) return;  // child already exists
+        //     }
+        //     children.push_back(new Bag(child_name));  // allocate new child on the heap and push to children
+        // }
+        void add_child(Bag* child) {
+            children.push_back(child);
+        }
+
+        friend std::ostream& operator<<(std::ostream&, const Bag&);
+};
+
+std::ostream& operator<<(std::ostream& os, const Bag& bag) {
+    os << "Bag " << bag.name << " has children:";
+    for (Bag* child : bag.children) {
+        os << ' ' << child->name;
+    }
+    os << '\n';
+    return os;
+}
+
+
+void run_example() {
+
+    // Hard-coded example.
+    Bag root = Bag("root");
+    std::cout << root;
+
+    std::cout << "root contains red? " << root.contains_descendant("red") << '\n';
+
+    Bag red = Bag("red");
+    root.children.push_back(&red);
+    std::cout << root;
+
+    std::cout << "root contains red? " << root.contains_descendant("red") << '\n';
+
+    std::cout << "root contains blue? " << root.contains_descendant("blue") << '\n';
+
+    Bag blue = Bag("blue");
+    red.children.push_back(&blue);
+    std::cout << root;
+
+    std::cout << "root contains blue? " << root.contains_descendant("blue") << '\n';
+
+    std::cout << "red contains blue? " << red.contains_descendant("blue") << '\n';
+
+    Bag* mystery = root.get_descendant("red");
+    std::cout << "Root gets red.\n";
+    std::cout << *mystery;
+
+    mystery = root.get_descendant("blue");
+    std::cout << "Root gets blue.\n";
+    std::cout << *mystery;
+
+}
+
+void run_heap_example() {
+
+    // Hard-coded example.
+    Bag root = Bag("root");
+    std::cout << root;
+
+    std::cout << "root contains red? " << root.contains_descendant("red") << '\n';
+
+    {
+        Bag* red_ptr = new Bag("red");
+        root.children.push_back(red_ptr);
+        std::cout << root;
+    }
+    std::cout << root;
+    std::cout << "root contains red? " << root.contains_descendant("red") << '\n';
+    std::cout << "root contains blue? " << root.contains_descendant("blue") << '\n';
+
+    {
+    Bag* mystery = root.get_descendant("red");
+    Bag* blue_ptr = new Bag("blue");
+    mystery->children.push_back(blue_ptr);
+    }
+    std::cout << root;
+    std::cout << "root contains blue? " << root.contains_descendant("blue") << '\n';
+
+    // std::cout << "root contains blue? " << root.contains("blue") << '\n';
+
+    // Bag red = *root.get("red");
+
+    // Bag blue = Bag("blue");
+    // red.children.push_back(&blue);
+    // std::cout << root;
+
+    // std::cout << "root contains blue? " << root.contains("blue") << '\n';
+
+    // std::cout << "red contains blue? " << red.contains("blue") << '\n';
+
+    // Bag* mystery = root.get("red");
+    // std::cout << "Root gets red.\n";
+    // std::cout << *mystery;
+
+    // mystery = root.get("blue");
+    // std::cout << "Root gets blue.\n";
+    // std::cout << *mystery;
+
+}
+
+void run_small_example() {
+
+    Bag root = Bag("root");
+
+}
+
+
+void add_bag_to_graph(Bag& root, const std::string& child_name, const std::string& parent_name) {
+
+    Bag* parent_ptr = root.get_descendant(parent_name);
+    if (parent_ptr == nullptr) {
+        // this parent does not yet exist in the graph
+        root.add_child(new Bag(parent_name));
+        parent_ptr = root.get_descendant(parent_name);
+    }
+
+    Bag* child_ptr = root.get_descendant(child_name);
+    if (child_ptr == nullptr) {
+        // this child does not yet exist in the graph
+        parent_ptr->add_child(new Bag(child_name));
+    } else {
+        // the child already exists elsewhere(?) in the graph so join it to this parent
+        parent_ptr->add_child(child_ptr);
+    }
+
+}
+
+
+int main(int argc, char** argv) {
+
+    run_heap_example();
+
+}
