@@ -1,162 +1,115 @@
 #include <vector>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <iostream>
+#include <utility>
+#include <regex>
+#include <fstream>
 
-// Actually this makes more sense if we keep parents instead of children. Back-traversal, at least, will be easier.
-// I think we still need a root though, for graph searches.
+
+std::regex PARENT_PATTERN {R"(^(\w* \w*) bags)"};
+std::regex CHILD_PATTERN {R"((\d+) (\w* \w*) bag)"};
+
 
 class Bag {
     public:
         std::string name;
-        std::vector<Bag*> children;
+        std::vector<Bag*> parents;
 
-        Bag(const std::string& name) :name {name}  {}
-
-        bool contains_descendant(const std::string& something) {
-            if (name == something) return true;
-            for (Bag* child : children) {
-                if (child->contains_descendant(something)) return true;
-            }
-            return false;
-        }
-
-        Bag* get_descendant(const std::string& something) {
-            Bag* candidate;
-            if (name == something) return this;
-            for (Bag* child : children) {
-                candidate = child->get_descendant(something);
-                if (candidate) return candidate;
-            }
-            return nullptr;
-        }
-
-        // void add_child(const std::string& child_name) {
-        //     for (Bag* child : children) {
-        //         if (child->name == child_name) return;  // child already exists
-        //     }
-        //     children.push_back(new Bag(child_name));  // allocate new child on the heap and push to children
-        // }
-        void add_child(Bag* child) {
-            children.push_back(child);
-        }
+        Bag(const std::string& name)
+            :name {name} {};
 
         friend std::ostream& operator<<(std::ostream&, const Bag&);
 };
 
+
 std::ostream& operator<<(std::ostream& os, const Bag& bag) {
-    os << "Bag " << bag.name << " has children:";
-    for (Bag* child : bag.children) {
-        os << ' ' << child->name;
+    if (!bag.parents.size()) {
+        os << "Bag " << bag.name << " has no parents.";
+    } else {
+        os << "Bag " << bag.name << " has parents: ";
+        for (Bag* parent: bag.parents) {
+            os << parent->name << ", ";
+        }
     }
     os << '\n';
     return os;
 }
 
 
-void run_example() {
 
-    // Hard-coded example.
-    Bag root = Bag("root");
-    std::cout << root;
+void _visit_bag(const Bag* bag, int& n_ancestors, std::unordered_set<std::string>& visited) {
+    // Mark bag as visited and increment ancestor count.
+    visited.insert(bag->name);
+    n_ancestors++;
 
-    std::cout << "root contains red? " << root.contains_descendant("red") << '\n';
-
-    Bag red = Bag("red");
-    root.children.push_back(&red);
-    std::cout << root;
-
-    std::cout << "root contains red? " << root.contains_descendant("red") << '\n';
-
-    std::cout << "root contains blue? " << root.contains_descendant("blue") << '\n';
-
-    Bag blue = Bag("blue");
-    red.children.push_back(&blue);
-    std::cout << root;
-
-    std::cout << "root contains blue? " << root.contains_descendant("blue") << '\n';
-
-    std::cout << "red contains blue? " << red.contains_descendant("blue") << '\n';
-
-    Bag* mystery = root.get_descendant("red");
-    std::cout << "Root gets red.\n";
-    std::cout << *mystery;
-
-    mystery = root.get_descendant("blue");
-    std::cout << "Root gets blue.\n";
-    std::cout << *mystery;
-
-}
-
-void run_heap_example() {
-
-    // Hard-coded example.
-    Bag root = Bag("root");
-    std::cout << root;
-
-    std::cout << "root contains red? " << root.contains_descendant("red") << '\n';
-
-    {
-        Bag* red_ptr = new Bag("red");
-        root.children.push_back(red_ptr);
-        std::cout << root;
+    for (auto parent : bag->parents) {
+        // Visit each parent, if we haven't already visited it.
+        auto search = visited.find(parent->name);
+        if (search == visited.end()) {
+            // We haven't, so visit.
+            _visit_bag(parent, n_ancestors, visited);
+        } // Otherwise, we have, so don't visit again.
     }
-    std::cout << root;
-    std::cout << "root contains red? " << root.contains_descendant("red") << '\n';
-    std::cout << "root contains blue? " << root.contains_descendant("blue") << '\n';
-
-    {
-    Bag* mystery = root.get_descendant("red");
-    Bag* blue_ptr = new Bag("blue");
-    mystery->children.push_back(blue_ptr);
-    }
-    std::cout << root;
-    std::cout << "root contains blue? " << root.contains_descendant("blue") << '\n';
-
-    // std::cout << "root contains blue? " << root.contains("blue") << '\n';
-
-    // Bag red = *root.get("red");
-
-    // Bag blue = Bag("blue");
-    // red.children.push_back(&blue);
-    // std::cout << root;
-
-    // std::cout << "root contains blue? " << root.contains("blue") << '\n';
-
-    // std::cout << "red contains blue? " << red.contains("blue") << '\n';
-
-    // Bag* mystery = root.get("red");
-    // std::cout << "Root gets red.\n";
-    // std::cout << *mystery;
-
-    // mystery = root.get("blue");
-    // std::cout << "Root gets blue.\n";
-    // std::cout << *mystery;
-
-}
-
-void run_small_example() {
-
-    Bag root = Bag("root");
-
 }
 
 
-void add_bag_to_graph(Bag& root, const std::string& child_name, const std::string& parent_name) {
+int count_ancestors(const Bag* bag) { 
+    int n_ancestors = 0;
+    std::unordered_set<std::string> visited;
 
-    Bag* parent_ptr = root.get_descendant(parent_name);
-    if (parent_ptr == nullptr) {
-        // this parent does not yet exist in the graph
-        root.add_child(new Bag(parent_name));
-        parent_ptr = root.get_descendant(parent_name);
+    _visit_bag(bag, n_ancestors, visited);
+    return n_ancestors - 1;  // not counting starting bag
+}
+
+
+void add_relationship(const std::string& parent_name,
+                      const std::string& child_name,
+                      std::unordered_map<std::string, Bag*>& bags) {
+    Bag* child;
+    Bag* parent;
+
+    child = bags[child_name];
+
+    if (child == nullptr) {
+        child = new Bag(child_name);
+        bags[child_name] = child;
     }
 
-    Bag* child_ptr = root.get_descendant(child_name);
-    if (child_ptr == nullptr) {
-        // this child does not yet exist in the graph
-        parent_ptr->add_child(new Bag(child_name));
-    } else {
-        // the child already exists elsewhere(?) in the graph so join it to this parent
-        parent_ptr->add_child(child_ptr);
+    parent = bags[parent_name];
+
+    if (parent == nullptr) {
+        parent = new Bag(parent_name);
+        bags[parent_name] = parent;
+    }
+
+    child->parents.push_back(parent);
+}
+
+
+void parse_line(const std::string& line, std::unordered_map<std::string, Bag*>& bags) {
+
+    std::string parent_name;
+    std::string child_name;
+    
+    // Parent matching.
+    auto bags_begin = std::sregex_iterator(line.begin(), line.end(), PARENT_PATTERN);
+    auto bags_end = std::sregex_iterator();
+
+    if (std::distance(bags_begin, bags_end) > 0) {
+        for (std::sregex_iterator b = bags_begin; b != bags_end; b++) {
+            parent_name = (*b)[1];
+        }
+    }
+
+    // Children matching.
+    for (std::sregex_iterator p(line.begin(), line.end(), CHILD_PATTERN); p != std::sregex_iterator{}; p++) {
+        // std::cout << (*p)[1] << '\n'; // number of child bags
+        child_name = (*p)[2];
+
+        // Record this parent-child relationship.
+        add_relationship(parent_name, child_name, bags);
     }
 
 }
@@ -164,6 +117,26 @@ void add_bag_to_graph(Bag& root, const std::string& child_name, const std::strin
 
 int main(int argc, char** argv) {
 
-    run_heap_example();
+    std::unordered_map<std::string, Bag*> bags;
+
+    std::ifstream filestream(argv[1]);
+
+    if (!filestream.is_open()) {
+        std::cout << "failed to open " << argv[1] << '\n';
+    }
+
+    std::string line;
+    while (std::getline(filestream, line)) {
+        parse_line(line, bags);
+    }
+
+    std::cout << "---------------------------------------------------------------------\n";
+    for (const auto& bag_entry : bags) {
+        std::cout << *(bag_entry.second);
+    }
+    std::cout << "---------------------------------------------------------------------\n";
+
+    std::cout << "shiny gold has " << count_ancestors(bags["shiny gold"]) << " ancestors.\n";
 
 }
+
