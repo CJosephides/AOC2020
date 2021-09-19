@@ -216,6 +216,7 @@ class Cluster {
     public:
     Cluster(const Tile& first, const Tile& second) {
         // assumes west -> east
+        // TODO add validation!
         std::vector<Tile> row;
         row.push_back(first);
         row.push_back(second);
@@ -224,6 +225,7 @@ class Cluster {
 
     Cluster(const Cluster& first, const Cluster& second) {
         // assumes west -> east, and that number of rows of tiles match
+        // TODO add validation!
         if (first.tiles.size() != second.tiles.size()) {
             throw std::runtime_error("bad cluster mege");
         }
