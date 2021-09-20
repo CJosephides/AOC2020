@@ -5,31 +5,11 @@
 #include <vector>
 #include <string>
 #include <stdexcept>
+#include <cmath>
 
 
 const int N = 10;
 using barray = std::array<bool, N>;
-
-
-//class Face {
-//
-//    public:
-//    std::vector<bool> elem;
-//
-//    Face(const std::array<bool, N>& array_elem) {
-//        for (int i = 0; i < N; i++)
-//            elem.push_back(array_elem[i]);
-//    }
-//
-//    Face(const std::vector<bool>& vector_elem) {
-//        for (int i = 0; i < N; i++)
-//            elem.push_back(vector_elem[i]);
-//    }
-//
-//    friend std::ostream& operator<<(std::ostream&, const Face&);
-//};
-
-
 using Face = std::vector<bool>;
 
 
@@ -106,6 +86,15 @@ class Tile {
     void rotate(int turns) {
         for (int i = 0; i < turns; i++) {
             rotate_once();
+        }
+    }
+
+    void flip_ud(void) {
+        barray tmp_row;
+        for (int i = 0; i < N / 2; i++) {
+            tmp_row = elements[i];
+            elements[i] = elements[N - 1 - i];
+            elements[N - 1- i] = tmp_row;
         }
     }
 
@@ -226,24 +215,30 @@ class Cluster {
     public:
     Cluster(Tile& first, Tile& second) {
         // assumes west -> east
-        // TODO add validation!
         std::vector<Tile> row;
         row.push_back(first);
         Face first_east = first.east();
         Face second_west = second.west();
         if (first_east != second_west) {
-            throw std::runtime_error("invalid cluster tile border merge");
+            throw std::runtime_error("invalid tile border merge");
         }
         row.push_back(second);
         tiles.push_back(row);
     }
 
-    Cluster(const Cluster& first, const Cluster& second) {
+    Cluster(Cluster& first, Cluster& second) {
         // assumes west -> east, and that number of rows of tiles match
-        // TODO add validation!
+        //
         if (first.tiles.size() != second.tiles.size()) {
             throw std::runtime_error("invalid sub-cluster dimensions");
         }
+
+        Face first_east = first.east();
+        Face second_west = second.west();
+        if (first_east != second_west) {
+            throw std::runtime_error("invalid cluster border merge");
+        }
+
         int n_rows = first.tiles.size();
         std::vector<Tile> row;
         for (int i = 0; i < n_rows; i++) {
@@ -302,6 +297,23 @@ class Cluster {
         }
         this->tiles = new_tiles;
     }
+
+    void flip_ud(void) {
+        std::vector<Tile> tmp_tile_row;
+        // First flip the arrangement.
+        for (int i = 0; i < floor(tiles.size() / 2); i++) {
+            tmp_tile_row = tiles[i];
+            tiles[i] = tiles[tiles.size() - 1 - i];
+            tiles[tiles.size() -1 - i] = tmp_tile_row;
+        }
+        // Then flip each tile.
+        for (int i = 0; i < tiles.size(); i++) {
+            for (int j = 0; j < tiles[i].size(); j++) {
+                tiles[i][j].flip_ud();
+            }
+        }
+
+    }
 };
 
 std::ostream& operator<<(std::ostream& os, const Cluster& cluster) {
@@ -328,7 +340,6 @@ std::ostream& operator<<(std::ostream& os, const Cluster& cluster) {
 
 
 int main(int argc, char** argv) {
-    // TODO add flipping! I didn't see it!
 
     std::string line;
     std::ifstream fs(argv[1]);
@@ -344,41 +355,28 @@ int main(int argc, char** argv) {
         }
     }
     
-    // NOTE these don't work after adding validation!
-    //Tile first = tiles[2311];
-    //Tile second = tiles[1951];
-    //Cluster cluster_one(first, second);
-    //cluster_one.rotate_once();
-    //std::cout << "Cluster one:" << std::endl;
-    //std::cout << cluster_one << std::endl;
-    //cluster_one.print_tiles();
-
-    //Tile third = tiles[1171];
-    //Tile fourth = tiles[1427];
-
-    //std::cout << "Cluster two:" << std::endl;
-    //Cluster cluster_two(third, fourth);
-    //cluster_two.rotate_once();
-    //std::cout << cluster_two << std::endl;
-    //cluster_two.print_tiles();
-
-    //Cluster cluster_three(cluster_one, cluster_two);
-    //std::cout << cluster_three << std::endl;
-    //cluster_three.print_tiles();
-
-    //Face east = cluster_three.east();
-    //std::cout << "The east face:" << std::endl;
-    //std::cout << east << std::endl;
-
-    //Face south = cluster_three.south();
-    //std::cout << "The south face:" << std::endl;
-    //std::cout << south << std::endl;
-    
-    // Nice!
-    Tile first = tiles[1489];
-    Tile second = tiles[1171];
-    second.rotate_once();
+    // A nice test case for the south-west corner of the small input.
+    Tile first = tiles[2729];
+    Tile second = tiles[2971];
+    first.rotate_once();
     second.rotate_once();
     Cluster cluster_one(first, second);
+    cluster_one.rotate_once();
+    cluster_one.flip_ud();
+    cluster_one.rotate_once();
+    cluster_one.rotate_once();
     std::cout << cluster_one << std::endl;
+
+    Tile third = tiles[1427];
+    Tile fourth = tiles[1489];
+    third.flip_ud();
+    fourth.flip_ud();
+    third.rotate(3);
+    fourth.rotate(3);
+    Cluster cluster_two(third, fourth);
+    cluster_two.rotate_once();
+    std::cout << cluster_two << std::endl;
+    
+    Cluster cluster_three(cluster_one, cluster_two);
+    std::cout << cluster_three << std::endl;
 }
