@@ -6,6 +6,7 @@
 #include <string>
 #include <stdexcept>
 #include <cmath>
+#include <utility>
 
 
 const int N = 10;
@@ -136,6 +137,10 @@ class Tile {
                 if ((this->elements[i][j]) != other.elements[i][j]) return false;
         return true;
     }
+
+    bool operator!=(const Tile& other) {
+        return !(*this == other);
+    }
 };
 
 std::ostream& operator<<(std::ostream& os, const Tile& tile) {
@@ -213,14 +218,36 @@ class Cluster {
     }
 
     public:
+    Cluster(void) {};
+
     Cluster(Tile& first, Tile& second) {
         // assumes west -> east
-        std::vector<Tile> row;
-        row.push_back(first);
         Face first_east = first.east();
         Face second_west = second.west();
         if (first_east != second_west) {
             throw std::runtime_error("invalid tile border merge");
+        }
+        std::vector<Tile> row;
+        row.push_back(first);
+        row.push_back(second);
+        tiles.push_back(row);
+    }
+
+    Cluster(Cluster& first, Tile& second) {
+        // assumes west -> east
+        //
+        if (first.tiles.size() != 1) {
+            throw std::runtime_error("invalid sub-cluster dimensions");
+        }
+
+        Face first_east = first.east();
+        Face second_west = second.west();
+        if (first_east != second_west) {
+            throw std::runtime_error("invalid tile border merge");
+        }
+        std::vector<Tile> row;
+        for (auto tile : first.tiles[0]) {
+            row.push_back(tile);
         }
         row.push_back(second);
         tiles.push_back(row);
@@ -228,7 +255,6 @@ class Cluster {
 
     Cluster(Cluster& first, Cluster& second) {
         // assumes west -> east, and that number of rows of tiles match
-        //
         if (first.tiles.size() != second.tiles.size()) {
             throw std::runtime_error("invalid sub-cluster dimensions");
         }
@@ -253,6 +279,36 @@ class Cluster {
             }
         this->tiles.push_back(row);
         }
+    }
+
+    static bool valid_merge(Tile& first, Tile& second) {
+        if (first.id == second.id)
+            return false;
+        Face first_east = first.east();
+        Face second_west = second.west();
+        return first_east == second_west;
+    }
+
+    static bool valid_merge(Cluster& first, Tile& second) {
+        for (auto first_tile_row : first.tiles)
+            for (auto first_tile : first_tile_row)
+                if (first_tile.id == second.id)
+                    return false;  // clusters can't contain the same tile id!
+        Face first_east = first.east();
+        Face second_west = second.west();
+        return ((first.tiles.size() == 1) && (first_east == second_west));
+    }
+
+    static bool valid_merge(Cluster& first, Cluster& second) {
+        for (auto first_tile_row : first.tiles)
+            for (auto first_tile : first_tile_row)
+                for (auto second_tile_row : second.tiles)
+                    for (auto second_tile : second_tile_row)
+                        if (first_tile.id == second_tile.id)
+                    return false;  // clusters can't contain the same tile id!
+        Face first_east = first.east();
+        Face second_west = second.west();
+        return ((first.tiles.size() == second.tiles.size()) && (first_east == second_west));
     }
 
     friend std::ostream& operator<<(std::ostream&, const Cluster&);
@@ -314,7 +370,13 @@ class Cluster {
         }
 
     }
+
+    std::pair<int, int> shape(void) {
+        std::pair<int, int> s = {tiles.size(), tiles[0].size()};
+        return s;
+    }
 };
+
 
 std::ostream& operator<<(std::ostream& os, const Cluster& cluster) {
     Tile tile;
@@ -338,6 +400,270 @@ std::ostream& operator<<(std::ostream& os, const Cluster& cluster) {
     return os;
 }
 
+bool operator==(Cluster& first, Cluster& second) {
+    // Check if all tile IDs match.
+    if (first.tiles.size() != second.tiles.size())
+        return false;
+    if (first.tiles[0].size() != second.tiles[0].size())
+        return false;
+    for (int i = 0; i < first.tiles.size(); i++) {
+        for (int j = 0; j < first.tiles[i].size(); j++) {
+            if (first.tiles[i][j] != second.tiles[i][j])
+                return false;
+        }
+    }
+    return true;
+    // TODO also check elements.
+}
+
+
+bool operator!=(Cluster& first, Cluster& second) {
+    return (!(first == second));
+}
+
+
+bool rotational_equivalence(Cluster& first, Cluster& second) {
+    Cluster tmp = first;
+    if (tmp == second)
+        return true;
+    tmp.rotate_once();
+    if (tmp == second)
+        return true;
+    tmp.rotate_once();
+    if (tmp == second)
+        return true;
+    tmp.rotate_once();
+    if (tmp == second)
+        return true;
+    tmp.flip_ud();
+    if (tmp == second)
+        return true;
+    tmp.rotate_once();
+    if (tmp == second)
+        return true;
+    tmp.rotate_once();
+    if (tmp == second)
+        return true;
+    tmp.rotate_once();
+    if (tmp == second)
+        return true;
+    return false;
+}
+
+
+std::vector<Tile> all_orientations(Tile& tile, bool flippy) {
+
+    std::vector<Tile> orientations;
+    orientations.push_back(tile);
+
+    tile.rotate_once();
+    orientations.push_back(tile);
+
+    tile.rotate_once();
+    orientations.push_back(tile);
+
+    tile.rotate_once();
+    orientations.push_back(tile);
+    tile.rotate_once();
+
+    if (flippy) {
+        tile.flip_ud();
+        orientations.push_back(tile);
+
+        tile.rotate_once();
+        orientations.push_back(tile);
+
+        tile.rotate_once();
+        orientations.push_back(tile);
+
+        tile.rotate_once();
+        orientations.push_back(tile);
+
+        tile.rotate_once();
+        tile.flip_ud();
+    }
+
+    return orientations;
+}
+
+std::vector<Cluster> all_orientations(Cluster& cluster, bool flippy) {
+    std::vector<Cluster> orientations;
+    orientations.push_back(cluster);
+
+    cluster.rotate_once();
+    orientations.push_back(cluster);
+
+    cluster.rotate_once();
+    orientations.push_back(cluster);
+
+    cluster.rotate_once();
+    orientations.push_back(cluster);
+    cluster.rotate_once();
+
+    if (flippy) {
+        cluster.flip_ud();
+        orientations.push_back(cluster);
+
+        cluster.rotate_once();
+        orientations.push_back(cluster);
+
+        cluster.rotate_once();
+        orientations.push_back(cluster);
+
+        cluster.rotate_once();
+        orientations.push_back(cluster);
+
+        cluster.rotate_once();
+        cluster.flip_ud();
+    }
+
+    return orientations;
+}
+
+
+std::vector<Cluster> all_pairwise_mergers(Tile& first, Tile& second) {
+    std::vector<Cluster> all_clusters;
+    std::vector<Tile> all_first = all_orientations(first, true);
+    std::vector<Tile> all_second = all_orientations(second, false);
+    Cluster merged_cluster;
+    for (auto fo : all_first) {
+        for (auto so : all_second) {
+            if (Cluster::valid_merge(fo, so)) {
+                merged_cluster = Cluster(fo, so);
+                bool add_cluster = true;
+                for (auto existing_cluster : all_clusters) {
+                    add_cluster &= (existing_cluster != merged_cluster);
+                    if (!add_cluster)
+                        break;
+                }
+                if (add_cluster)
+                    all_clusters.push_back(merged_cluster);
+            }
+        }
+    }
+    return all_clusters;
+}
+
+std::vector<Cluster> all_pairwise_mergers(Cluster& first, Tile& second) {
+    std::vector<Cluster> all_clusters;
+    std::vector<Cluster> all_first = all_orientations(first, true);
+    std::vector<Tile> all_second = all_orientations(second, false);
+    Cluster merged_cluster;
+    for (auto fo : all_first) {
+        for (auto so : all_second) {
+            if (Cluster::valid_merge(fo, so)) {
+                merged_cluster = Cluster(fo, so);
+                bool add_cluster = true;
+                for (auto existing_cluster : all_clusters) {
+                    add_cluster &= (existing_cluster != merged_cluster);
+                    if (!add_cluster)
+                        break;
+                }
+                if (add_cluster)
+                    all_clusters.push_back(merged_cluster);
+            }
+        }
+    }
+    return all_clusters;
+}
+
+std::vector<Cluster> all_pairwise_mergers(Cluster& first, Cluster& second) {
+    std::vector<Cluster> all_clusters;
+    std::vector<Cluster> all_first = all_orientations(first, true);
+    std::vector<Cluster> all_second = all_orientations(second, false);
+    Cluster merged_cluster;
+    for (auto fo : all_first) {
+        for (auto so : all_second) {
+            if (Cluster::valid_merge(fo, so)) {
+                merged_cluster = Cluster(fo, so);
+                bool add_cluster = true;
+                for (auto existing_cluster : all_clusters) {
+                    add_cluster &= (existing_cluster != merged_cluster);
+                    if (!add_cluster)
+                        break;
+                }
+                if (add_cluster)
+                    all_clusters.push_back(merged_cluster);
+            }
+        }
+    }
+    return all_clusters;
+}
+
+
+std::vector<Cluster> merge_cluster_vectors(std::vector<Tile>& first_vector, std::vector<Tile>& second_vector) {
+
+    bool add_cluster;
+    std::vector<Cluster> merged_vector;
+    for (auto cluster : first_vector) {
+        for (auto other_cluster : second_vector) {
+            for (auto merged_cluster : all_pairwise_mergers(cluster, other_cluster)) {
+                add_cluster = true;
+                for (auto existing_cluster : merged_vector) {
+                    add_cluster &= (merged_cluster != existing_cluster);
+                    if (!add_cluster)
+                        break;
+                }
+                if (add_cluster)
+                    merged_vector.push_back(merged_cluster);
+            }
+        }
+    }
+    return merged_vector;
+}
+
+
+std::vector<Cluster> merge_cluster_vectors(std::vector<Cluster>& first_vector, std::vector<Tile>& second_vector,
+                                           std::pair<int, int> target_shape) {
+
+    bool add_cluster;
+    std::vector<Cluster> merged_vector;
+    for (auto cluster : first_vector) {
+        for (auto other_cluster : second_vector) {
+            for (auto merged_cluster : all_pairwise_mergers(cluster, other_cluster)) {
+                add_cluster = true;
+                for (auto existing_cluster : merged_vector) {
+                    add_cluster &= (merged_cluster != existing_cluster);
+                    if (!add_cluster)
+                        break;
+                }
+                if (add_cluster) { 
+                    if ((merged_cluster.shape().first == target_shape.first) && (merged_cluster.shape().second == target_shape.second))
+                        merged_vector.push_back(merged_cluster);
+                    merged_vector.push_back(merged_cluster);
+                }
+            }
+        }
+    }
+    return merged_vector;
+}
+
+
+std::vector<Cluster> merge_cluster_vectors(std::vector<Cluster>& first_vector, std::vector<Cluster>& second_vector,
+                                           std::pair<int, int> target_shape) {
+
+    bool add_cluster;
+    std::vector<Cluster> merged_vector;
+    for (auto cluster : first_vector) {
+        for (auto other_cluster : second_vector) {
+            for (auto merged_cluster : all_pairwise_mergers(cluster, other_cluster)) {
+                add_cluster = true;
+                for (auto existing_cluster : merged_vector) {
+                    //add_cluster &= (merged_cluster != existing_cluster);
+                    add_cluster &= (!rotational_equivalence(merged_cluster, existing_cluster));
+                    if (!add_cluster)
+                        break;
+                }
+                if (add_cluster) {
+                    if ((merged_cluster.shape().first == target_shape.first) && (merged_cluster.shape().second == target_shape.second))
+                        merged_vector.push_back(merged_cluster);
+                }
+            }
+        }
+    }
+    return merged_vector;
+}
+
 
 int main(int argc, char** argv) {
 
@@ -354,29 +680,68 @@ int main(int argc, char** argv) {
             tiles[tile.id] = tile;
         }
     }
-    
-    // A nice test case for the south-west corner of the small input.
-    Tile first = tiles[2729];
-    Tile second = tiles[2971];
-    first.rotate_once();
-    second.rotate_once();
-    Cluster cluster_one(first, second);
-    cluster_one.rotate_once();
-    cluster_one.flip_ud();
-    cluster_one.rotate_once();
-    cluster_one.rotate_once();
-    std::cout << cluster_one << std::endl;
 
-    Tile third = tiles[1427];
-    Tile fourth = tiles[1489];
-    third.flip_ud();
-    fourth.flip_ud();
-    third.rotate(3);
-    fourth.rotate(3);
-    Cluster cluster_two(third, fourth);
-    cluster_two.rotate_once();
-    std::cout << cluster_two << std::endl;
-    
-    Cluster cluster_three(cluster_one, cluster_two);
-    std::cout << cluster_three << std::endl;
+    /*
+    // Test the small input case.
+    std::vector<Tile> one_by_ones;
+    for (auto [id, tile]: tiles)
+        one_by_ones.push_back(tile);
+
+    std::vector<Cluster> one_by_twos = merge_cluster_vectors(one_by_ones, one_by_ones);
+    std::cout << one_by_twos.size() << " 1x2 clusters." << std::endl;
+
+    std::vector<Cluster> one_by_threes = merge_cluster_vectors(one_by_twos, one_by_ones);
+    std::cout << one_by_threes.size() << " 1x3 clusters." << std::endl;
+
+    std::vector<Cluster> three_by_twos = merge_cluster_vectors(one_by_threes, one_by_threes, {3, 2});
+    std::cout << three_by_twos.size() << " 3x2 clusters." << std::endl;
+
+    std::vector<Cluster> three_by_threes = merge_cluster_vectors(three_by_twos, one_by_threes, {3, 3});
+    std::cout << three_by_threes.size() << " 3x3 clusters." << std::endl;
+
+    for (auto cluster : three_by_threes) {
+        cluster.print_tiles();
+        std::cout << std::endl;
+    }
+    */
+
+    // Solve full case!
+    std::vector<Tile> one_by_ones;
+    for (auto [id, tile]: tiles)
+        one_by_ones.push_back(tile);
+
+    // 1x1 + 1x1 -> 1x2
+    std::vector<Cluster> one_by_twos = merge_cluster_vectors(one_by_ones, one_by_ones);
+    std::cout << one_by_twos.size() << " 1x2." << std::endl;
+
+    // 1x2 + 1x2 -> 2x2
+    std::vector<Cluster> two_by_twos = merge_cluster_vectors(one_by_twos, one_by_twos, {2, 2});
+    std::cout << two_by_twos.size() << " 2x2." << std::endl;
+
+    // 2x2 + 2x2 -> 2x4
+    std::vector<Cluster> two_by_fours = merge_cluster_vectors(two_by_twos, two_by_twos, {2, 4});
+    std::cout << two_by_fours.size() << " 2x4." << std::endl;
+
+    // 2x4 + 2x4 -> 4x4
+    std::vector<Cluster> four_by_fours = merge_cluster_vectors(two_by_fours, two_by_fours, {4, 4});
+    std::cout << four_by_fours.size() << " 4x4." << std::endl;
+
+    // 4x4 + 4x4 -> 4x8
+    std::vector<Cluster> four_by_eights = merge_cluster_vectors(four_by_fours, four_by_fours, {4, 8});  // w->e
+    std::cout << four_by_eights.size() << " 4x8." << std::endl;
+
+    // 4x8 + 4x4 -> 4x12
+    std::vector<Cluster> four_by_twelves = merge_cluster_vectors(four_by_eights, four_by_fours, {4, 12});  // w->e
+    std::cout << four_by_twelves.size() << " 4x12." << std::endl;
+
+    // 4x12 + 4x12 -> 12x8
+    std::vector<Cluster> eight_by_twelves = merge_cluster_vectors(four_by_twelves, four_by_twelves, {12, 8});  // w->e
+    std::cout << eight_by_twelves.size() << " 12x8." << std::endl;
+
+    // 8x12 + 4x12 -> 12x12
+    std::vector<Cluster> twelve_by_twelves = merge_cluster_vectors(eight_by_twelves, four_by_twelves, {12, 12});  // w->e
+    std::cout << twelve_by_twelves.size() << " 12x12." << std::endl;
+
+    std::cout << twelve_by_twelves[0] << std::endl;
+    twelve_by_twelves[0].print_tiles();
 }
